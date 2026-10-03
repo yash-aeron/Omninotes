@@ -100,6 +100,15 @@ export interface CanvasLayer {
   opacity: number;
 }
 
+export interface PdfBackground {
+  dataUrl: string; // High-resolution rasterized rendering of the PDF page
+  originalWidth: number; // Native PDF point width
+  originalHeight: number; // Native PDF point height
+  pageIndex: number; // 0-based page index
+  pdfName?: string; // Original filename
+  extractedText?: string; // Text content extracted from the PDF page
+}
+
 export interface PageMetadata {
   id: string;
   title: string;
@@ -107,6 +116,7 @@ export interface PageMetadata {
   theme: PaperTheme;
   width: number; // e.g. 820 standard classic A4 ratio
   height: number; // e.g. 1160
+  pdfBackground?: PdfBackground;
   layers: CanvasLayer[];
   activeLayerId: string;
   strokes: Stroke[];
