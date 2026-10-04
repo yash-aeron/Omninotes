@@ -12,6 +12,7 @@ import {
   Search,
   MoreVertical,
   FileText,
+  FileUp,
 } from 'lucide-react';
 import type { PageMetadata, PaperTheme } from '../../engine/types';
 import { PAPER_THEME_COLORS } from '../canvas/PaperTemplate';
@@ -27,6 +28,7 @@ interface PagesPanelProps {
   onMovePage: (fromIndex: number, toIndex: number) => void;
   onDeletePage: (index: number) => void;
   onTogglePinPage: (pageId: string) => void;
+  onImportPdf?: (file: File) => void;
 }
 
 export const PagesPanel: React.FC<PagesPanelProps> = ({
@@ -40,6 +42,7 @@ export const PagesPanel: React.FC<PagesPanelProps> = ({
   onMovePage,
   onDeletePage,
   onTogglePinPage,
+  onImportPdf,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -61,6 +64,41 @@ export const PagesPanel: React.FC<PagesPanelProps> = ({
     });
 
   const renderThumbnailContent = (page: PageMetadata) => {
+    // If page is a PDF page, show crisp high-res rasterized background with stroke overlay
+    if (page.pdfBackground?.dataUrl) {
+      return (
+        <div className="w-full h-full relative overflow-hidden select-none bg-white flex items-center justify-center">
+          <img
+            src={page.pdfBackground.dataUrl}
+            alt={page.title}
+            className="w-full h-full object-contain pointer-events-none select-none"
+            draggable={false}
+          />
+          {page.strokes.length > 0 && (
+            <svg
+              viewBox={`0 0 ${page.width || 820} ${page.height || 1160}`}
+              className="absolute inset-0 w-full h-full pointer-events-none opacity-85"
+            >
+              {page.strokes.map((s) => {
+                const d = s.pathData || '';
+                return d ? (
+                  <path
+                    key={s.id}
+                    d={d}
+                    fill={s.style.color}
+                    opacity={s.style.opacity || 1}
+                  />
+                ) : null;
+              })}
+            </svg>
+          )}
+          <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-mono text-zinc-300 border border-white/10 backdrop-blur-xs">
+            PDF
+          </div>
+        </div>
+      );
+    }
+
     const theme = (page.theme || 'white') as PaperTheme;
     const colors = PAPER_THEME_COLORS[theme] || PAPER_THEME_COLORS.white;
 
@@ -165,6 +203,29 @@ export const PagesPanel: React.FC<PagesPanelProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Import PDF Button */}
+          {onImportPdf && (
+            <label
+              className="flex items-center gap-1 px-2 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-xs font-medium cursor-pointer transition-all active:scale-95"
+              title="Import PDF pages into this notebook"
+            >
+              <FileUp size={12} className="text-blue-400" />
+              <span className="hidden sm:inline">PDF</span>
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    onImportPdf(f);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
+          )}
+
           {/* Add Page Button */}
           <button
             onClick={onOpenAddPageModal}
