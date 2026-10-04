@@ -10,6 +10,7 @@ import {
   Music2,
   BookOpen,
   Sparkles,
+  FileUp,
 } from 'lucide-react';
 import type { PaperPattern, PaperTheme } from '../../engine/types';
 import { PAPER_THEME_COLORS } from './PaperTemplate';
@@ -27,6 +28,7 @@ interface AddPageModalProps {
     title: string;
     position: 'after-current' | 'end' | 'start';
   }) => void;
+  onImportPdf?: (file: File) => void;
 }
 
 interface TemplateOption {
@@ -136,6 +138,7 @@ export const AddPageModal: React.FC<AddPageModalProps> = ({
   currentPattern,
   currentTheme,
   onAddPage,
+  onImportPdf,
 }) => {
   const [selectedPattern, setSelectedPattern] = useState<PaperPattern>(currentPattern);
   const [selectedTheme, setSelectedTheme] = useState<PaperTheme>(currentTheme);
@@ -391,6 +394,38 @@ export const AddPageModal: React.FC<AddPageModalProps> = ({
 
         {/* Content Body: Two Columns (Templates + Configuration) */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* PDF Document Import Prompt */}
+          {onImportPdf && (
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/40 to-indigo-950/20 border border-blue-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300">
+                  <FileUp size={16} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-white">Import PDF Document</h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Insert slides, worksheets, or documents directly into this notebook
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-semibold cursor-pointer shadow-sm transition-all">
+                <span>Select PDF</span>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      onImportPdf(f);
+                      onClose();
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          )}
+
           {/* 1. Category Filter Tabs */}
           <div className="flex items-center gap-1.5 border-b border-white/5 pb-3">
             {[
