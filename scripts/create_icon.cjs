@@ -1,4 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <!-- Background Canvas: Deep Midnight Slate -->
     <linearGradient id="appBg" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -174,4 +179,66 @@
 
   <!-- Wet Ink Reflection Dot at the Pen Tip -->
   <circle cx="236" cy="302" r="3.2" fill="#3b82f6" opacity="0.95" filter="url(#inkGlow)" />
-</svg>
+</svg>`;
+
+async function buildIcon() {
+  const publicDir = path.resolve(__dirname, '../public');
+  const svgPath = path.join(publicDir, 'favicon.svg');
+  const pngPath = path.join(publicDir, 'app-icon.png');
+  const icoPath = path.join(publicDir, 'app-icon.ico');
+
+  // Save SVG
+  fs.writeFileSync(svgPath, svgContent, 'utf8');
+  console.log('Saved favicon.svg');
+
+  // Render to 512x512 PNG using Playwright
+  console.log('Rendering 512x512 PNG via Playwright Edge/Chromium...');
+  const browser = await chromium.launch({ headless: true, channel: 'msedge' });
+  const page = await browser.newPage({ viewport: { width: 512, height: 512 } });
+
+  const base64Svg = Buffer.from(svgContent).toString('base64');
+  await page.setContent(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { width: 512px; height: 512px; overflow: hidden; background: transparent; display: flex; align-items: center; justify-content: center; }
+          img { width: 512px; height: 512px; }
+        </style>
+      </head>
+      <body>
+        <img src="data:image/svg+xml;base64,${base64Svg}" />
+      </body>
+    </html>
+  `);
+
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: pngPath, omitBackground: true });
+  await browser.close();
+  console.log('Saved app-icon.png (512x512)');
+
+  // Convert PNG to Windows ICO using PowerShell script file
+  console.log('Generating Windows app-icon.ico (256x256)...');
+  const tempPs1 = path.join(publicDir, 'temp_ico.ps1');
+  const psCode = `Add-Type -AssemblyName System.Drawing
+$png = [System.Drawing.Bitmap]::FromFile('${pngPath.replace(/'/g, "''")}')
+$thumb = New-Object System.Drawing.Bitmap $png, 256, 256
+$hIcon = $thumb.GetHicon()
+$icon = [System.Drawing.Icon]::FromHandle($hIcon)
+$fs = New-Object System.IO.FileStream '${icoPath.replace(/'/g, "''")}', ([System.IO.FileMode]::Create)
+$icon.Save($fs)
+$fs.Close()
+$thumb.Dispose()
+$png.Dispose()
+`;
+  fs.writeFileSync(tempPs1, psCode, 'utf8');
+  try {
+    execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempPs1}"`, { stdio: 'inherit' });
+  } finally {
+    if (fs.existsSync(tempPs1)) fs.unlinkSync(tempPs1);
+  }
+  console.log('Generated app-icon.ico successfully');
+}
+
+buildIcon().catch(console.error);
