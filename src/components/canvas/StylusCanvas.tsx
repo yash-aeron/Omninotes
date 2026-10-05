@@ -42,6 +42,7 @@ interface StylusCanvasProps {
   }) => void;
   onPanChange?: (pan: { x: number; y: number }) => void;
   onZoomChange?: (zoom: number) => void;
+  onDropPdf?: (file: File) => void;
 }
 
 export const StylusCanvas: React.FC<StylusCanvasProps> = ({
@@ -62,6 +63,7 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
   onPointerTelemetry,
   onPanChange,
   onZoomChange,
+  onDropPdf,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
@@ -312,6 +314,11 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
     if (files.length === 0) return;
 
     const file = files[0];
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      onDropPdf?.(file);
+      return;
+    }
+
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = () => {
@@ -405,6 +412,19 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
             width={viewMode === 'classic' ? page.width : 4000}
             height={viewMode === 'classic' ? page.height : 4000}
           />
+
+          {/* PDF Page High-Res Background Layer */}
+          {page.pdfBackground?.dataUrl && (
+            <div className="absolute inset-0 pointer-events-none select-none overflow-hidden flex items-center justify-center bg-white">
+              <img
+                src={page.pdfBackground.dataUrl}
+                alt={`PDF Page ${page.pdfBackground.pageIndex + 1} - ${page.title}`}
+                data-testid="pdf-page-background"
+                className="w-full h-full object-contain pointer-events-none select-none"
+                draggable={false}
+              />
+            </div>
+          )}
 
           {/* Render Images on Canvas (can be annotated on top) */}
           {page.images.map((img) => (

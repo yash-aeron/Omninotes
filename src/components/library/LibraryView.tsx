@@ -8,6 +8,7 @@ import {
   Star,
   Clock,
   FileText,
+  FileUp,
   Trash2,
   FolderPlus,
   ChevronRight,
@@ -20,6 +21,7 @@ interface LibraryViewProps {
   onQuickNote: () => void;
   onDeleteNotebook: (notebookId: string) => void;
   onOpenSearch: () => void;
+  onImportPdf?: (file: File) => void;
 }
 
 const TEMPLATE_STARTERS: Array<{
@@ -94,6 +96,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onQuickNote,
   onDeleteNotebook,
   onOpenSearch,
+  onImportPdf,
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'notebooks' | 'recent' | 'favorites'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -164,7 +167,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   };
 
   return (
-    <div className="flex w-screen h-screen bg-[#090a0f] text-gray-100 select-none overflow-hidden font-sans">
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        const f = e.dataTransfer.files?.[0];
+        if (f && (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))) {
+          onImportPdf?.(f);
+        }
+      }}
+      className="flex w-screen h-screen bg-[#090a0f] text-gray-100 select-none overflow-hidden font-sans"
+    >
       {/* 1. Left Navigation Rail */}
       <aside className="w-64 border-r border-white/5 bg-[#0e1017]/80 backdrop-blur-xl flex flex-col justify-between p-4 z-20">
         <div className="space-y-6">
@@ -197,6 +210,25 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <FolderPlus size={14} className="text-zinc-400" />
               <span>New Notebook</span>
             </button>
+
+            {onImportPdf && (
+              <label className="w-full py-2.5 px-3.5 bg-blue-500/10 hover:bg-blue-500/20 active:scale-[0.98] text-blue-300 hover:text-blue-200 border border-blue-500/30 rounded-xl font-medium text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm">
+                <FileUp size={14} className="text-blue-400" />
+                <span>Import PDF</span>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      onImportPdf(f);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </label>
+            )}
           </div>
 
           {/* Navigation Items */}
@@ -301,6 +333,25 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            {onImportPdf && (
+              <label className="px-3.5 py-2 text-xs font-semibold text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95">
+                <FileUp size={14} className="text-blue-400" />
+                <span>Open / Import PDF</span>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      onImportPdf(f);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </label>
+            )}
+
             {notebooks.length > 0 && (
               <button
                 onClick={() => onOpenNotebook(notebooks[0].id, 0)}

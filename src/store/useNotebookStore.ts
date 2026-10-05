@@ -13,6 +13,7 @@ import type {
   ImageElement,
 } from '../engine/types';
 import { StorageAdapter } from '../engine/storage-adapter';
+import { parsePdfDocument, convertPdfPagesToNotebookPages } from '../engine/pdf-engine';
 
 const DEFAULT_LAYERS: CanvasLayer[] = [
   { id: 'layer-1', name: 'Layer 1 (Background)', visible: true, locked: false, opacity: 1 },
@@ -78,6 +79,12 @@ export function useNotebookStore() {
   const [showPagesPanel, setShowPagesPanel] = useState<boolean>(false);
   const [showLayers, setShowLayers] = useState<boolean>(false);
   const [showTimeLapse, setShowTimeLapse] = useState<boolean>(false);
+  const [isImportingPdf, setIsImportingPdf] = useState<boolean>(false);
+  const [pdfImportProgress, setPdfImportProgress] = useState<{
+    current: number;
+    total: number;
+    message: string;
+  } | null>(null);
 
   // Time-Lapse Replay State
   const [timeLapseProgress, setTimeLapseProgress] = useState<number>(1.0);
@@ -215,6 +222,109 @@ export function useNotebookStore() {
       setAppView('editor');
     },
     []
+  );
+
+  const importPdfAsNotebook = useCallback(async (file: File) => {
+    try {
+      setIsImportingPdf(true);
+      setPdfImportProgress({ current: 0, total: 1, message: 'Opening PDF file...' });
+
+      const buffer = await file.arrayBuffer();
+      const result = await parsePdfDocument(buffer, file.name, {
+        onProgress: (current, total, message) => {
+          setPdfImportProgress({ current, total, message });
+        },
+      });
+
+      if (result.pages.length === 0) {
+        throw new Error('No renderable pages found in PDF.');
+      }
+
+      const pages = convertPdfPagesToNotebookPages(result);
+      const cleanTitle = file.name.replace(/\.[^/.]+$/, '');
+      const newNb: Notebook = {
+        id: `nb-pdf-${Date.now()}`,
+        title: cleanTitle,
+        color: '#3b82f6',
+        sections: [
+          {
+            id: `sec-${Date.now()}`,
+            title: 'Document',
+            pages,
+            activePageIndex: 0,
+          },
+        ],
+        activeSectionId: `sec-${Date.now()}`,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      setNotebooks((prev) => [newNb, ...prev]);
+      setActiveNotebookId(newNb.id);
+      setActivePageIndex(0);
+      setAppView('editor');
+      setShowPagesPanel(true);
+    } catch (err) {
+      console.error('Failed to import PDF document:', err);
+      alert(`Could not import PDF: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsImportingPdf(false);
+      setPdfImportProgress(null);
+    }
+  }, []);
+
+  const importPdfPagesIntoCurrentNotebook = useCallback(
+    async (file: File, insertPosition: 'end' | 'after-current' = 'after-current') => {
+      try {
+        setIsImportingPdf(true);
+        setPdfImportProgress({ current: 0, total: 1, message: 'Reading PDF pages...' });
+
+        const buffer = await file.arrayBuffer();
+        const result = await parsePdfDocument(buffer, file.name, {
+          onProgress: (current, total, message) => {
+            setPdfImportProgress({ current, total, message });
+          },
+        });
+
+        if (result.pages.length === 0) {
+          throw new Error('No renderable pages found in PDF.');
+        }
+
+        const newPages = convertPdfPagesToNotebookPages(result);
+
+        setNotebooks((prevNbs) =>
+          prevNbs.map((nb) => {
+            if (nb.id !== activeNotebookId) return nb;
+            return {
+              ...nb,
+              sections: nb.sections.map((sec) => {
+                let targetIndex = sec.pages.length;
+                if (insertPosition === 'after-current') {
+                  targetIndex = Math.min(sec.pages.length, activePageIndex + 1);
+                }
+                const updated = [...sec.pages];
+                updated.splice(targetIndex, 0, ...newPages);
+                return {
+                  ...sec,
+                  pages: updated,
+                };
+              }),
+            };
+          })
+        );
+
+        const newActiveIdx = insertPosition === 'after-current' ? activePageIndex + 1 : pages.length;
+        setActivePageIndex(newActiveIdx);
+        setShowPagesPanel(true);
+      } catch (err) {
+        console.error('Failed to insert PDF pages:', err);
+        alert(`Could not insert PDF pages: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setIsImportingPdf(false);
+        setPdfImportProgress(null);
+      }
+    },
+    [pages.length, activePageIndex, activeNotebookId]
   );
 
   const quickNote = useCallback(() => {
@@ -636,6 +746,8 @@ export function useNotebookStore() {
     showPagesPanel,
     showLayers,
     showTimeLapse,
+    isImportingPdf,
+    pdfImportProgress,
     timeLapseProgress,
     isTimeLapsePlaying,
     timeLapseSpeed,
@@ -695,6 +807,8 @@ export function useNotebookStore() {
     setAppView,
     openNotebook,
     createAndOpenNotebook,
+    importPdfAsNotebook,
+    importPdfPagesIntoCurrentNotebook,
     quickNote,
     updateNotebookTitle,
     updatePageTitle: (title: string) => updateCurrentPage((p) => ({ ...p, title })),

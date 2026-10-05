@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type { PageMetadata } from './types';
 import { generateStrokePath } from './stroke-math';
+import { renderPageToCanvasAsync } from './canvas-image';
 
 export interface ExportOptions {
   includeInk: boolean;
@@ -72,47 +73,48 @@ export function exportToSVG(page: PageMetadata): string {
 }
 
 /**
- * Export page or notebook to PDF using jsPDF
+ * Export page or notebook to PDF using jsPDF with full fidelity ink & PDF background layering
  */
 export async function exportToPDF(
   pages: PageMetadata[],
   title: string = 'OmniNotes Notebook'
 ): Promise<void> {
+  if (pages.length === 0) return;
+
+  const firstPage = pages[0];
+  const firstW = firstPage.width || 820;
+  const firstH = firstPage.height || 1160;
+
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: firstW > firstH ? 'landscape' : 'portrait',
     unit: 'pt',
-    format: 'a4',
+    format: [firstW, firstH],
   });
 
-  const pdfWidth = doc.internal.pageSize.getWidth();
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
+    const pageW = page.width || 820;
+    const pageH = page.height || 1160;
 
-  pages.forEach((page, index) => {
-    if (index > 0) doc.addPage();
-
-    // Page title header
-    doc.setFontSize(18);
-    doc.text(page.title || `Page ${index + 1}`, 40, 50);
-
-    doc.setFontSize(10);
-    doc.setTextColor(120, 120, 120);
-    doc.text(`OmniNotes | Template: ${page.pattern} | Strokes: ${page.strokes.length}`, 40, 70);
-
-    // If AI transcription exists, format text into PDF
-    if (page.aiTranscription) {
-      doc.setFontSize(12);
-      doc.setTextColor(30, 30, 30);
-      const splitText = doc.splitTextToSize(page.aiTranscription, pdfWidth - 80);
-      doc.text(splitText, 40, 100);
-    } else {
-      doc.setFontSize(11);
-      doc.setTextColor(100, 100, 100);
-      doc.text(
-        `This page contains ${page.strokes.length} handwriting strokes.`,
-        40,
-        120
-      );
+    if (i > 0) {
+      doc.addPage([pageW, pageH], pageW > pageH ? 'landscape' : 'portrait');
     }
-  });
+
+    // Render composite page (PDF background + highlighters + user strokes + text blocks)
+    const canvas = await renderPageToCanvasAsync(page, {
+      maxWidth: Math.round(pageW * 1.5),
+      maxHeight: Math.round(pageH * 1.5),
+    });
+
+    if (canvas) {
+      const imgData = canvas.toDataURL('image/jpeg', 0.90);
+      doc.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
+    } else {
+      // Fallback text
+      doc.setFontSize(16);
+      doc.text(page.title || `Page ${i + 1}`, 40, 50);
+    }
+  }
 
   doc.save(`${title.toLowerCase().replace(/\s+/g, '-')}.pdf`);
 }

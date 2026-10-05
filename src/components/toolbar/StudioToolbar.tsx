@@ -27,6 +27,7 @@ import {
   Cpu,
   LayoutGrid,
   FilePlus,
+  FileUp,
 } from 'lucide-react';
 import type { PenType, PaperPattern, PaperTheme, ViewMode } from '../../engine/types';
 
@@ -51,6 +52,7 @@ interface StudioToolbarProps {
   onBackToLibrary: () => void;
   onTogglePagesPanel?: () => void;
   onOpenAddPageModal?: () => void;
+  onImportPdf?: (file: File) => void;
   onUpdatePageTitle: (title: string) => void;
   onSelectPen: (pen: PenType) => void;
   onSelectColor: (color: string) => void;
@@ -116,6 +118,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
   onBackToLibrary,
   onTogglePagesPanel,
   onOpenAddPageModal,
+  onImportPdf,
   onUpdatePageTitle,
   onSelectPen,
   onSelectColor,
@@ -224,6 +227,29 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
               <FilePlus size={13} className="text-zinc-400" />
               <span className="hidden sm:inline">Add Page</span>
             </button>
+          )}
+
+          {/* Import PDF Trigger */}
+          {onImportPdf && (
+            <label
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 hover:text-white text-xs font-medium border border-blue-500/25 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Import PDF pages into notebook"
+            >
+              <FileUp size={13} className="text-blue-400" />
+              <span className="hidden sm:inline">Import PDF</span>
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    onImportPdf(f);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
           )}
 
           <div className="h-4 w-px bg-white/10" />

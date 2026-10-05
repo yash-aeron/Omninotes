@@ -18,6 +18,7 @@ import type { PenType } from './engine/types';
 import {
   FilePlus,
   FileDown,
+  FileUp,
   Sparkles,
   Play,
   Grid,
@@ -182,6 +183,28 @@ export function App() {
         action: () => setShowMcpModal(true),
       },
       {
+        id: 'import-pdf',
+        title: 'Open / Import PDF Document',
+        category: 'File',
+        icon: <FileUp size={16} />,
+        action: () => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.pdf,application/pdf';
+          input.onchange = (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (file) {
+              if (store.appView === 'library') {
+                store.importPdfAsNotebook(file);
+              } else {
+                store.importPdfPagesIntoCurrentNotebook(file);
+              }
+            }
+          };
+          input.click();
+        },
+      },
+      {
         id: 'export-pdf',
         title: 'Export Notebook to PDF Document',
         category: 'Export',
@@ -264,6 +287,7 @@ export function App() {
           onQuickNote={store.quickNote}
           onDeleteNotebook={store.deleteNotebook}
           onOpenSearch={() => setShowCommandPalette(true)}
+          onImportPdf={store.importPdfAsNotebook}
         />
       ) : (
         /* View 2: Notebook Workspace & Studio Inking Canvas */
@@ -289,6 +313,7 @@ export function App() {
             pageCount={store.pages.length}
             onTogglePagesPanel={() => store.setShowPagesPanel(!store.showPagesPanel)}
             onOpenAddPageModal={() => setShowAddPageModal(true)}
+            onImportPdf={store.importPdfPagesIntoCurrentNotebook}
             onBackToLibrary={() => store.setAppView('library')}
             onUpdatePageTitle={store.updatePageTitle}
             onSelectPen={(pen: PenType) =>
@@ -336,6 +361,7 @@ export function App() {
               activePageIndex={store.activePageIndex}
               onSelectPage={store.setActivePageIndex}
               onOpenAddPageModal={() => setShowAddPageModal(true)}
+              onImportPdf={store.importPdfPagesIntoCurrentNotebook}
               onDuplicatePage={store.duplicatePage}
               onMovePage={store.movePage}
               onDeletePage={store.deletePage}
@@ -376,6 +402,7 @@ export function App() {
                 onImagesChange={store.updateImages}
                 onPanChange={store.setPan}
                 onZoomChange={store.setZoom}
+                onDropPdf={store.importPdfPagesIntoCurrentNotebook}
               />
 
               {/* Layers Panel Popover */}
@@ -464,6 +491,7 @@ export function App() {
         currentPattern={store.currentPage.pattern}
         currentTheme={store.currentPage.theme}
         onAddPage={store.addPageWithTemplate}
+        onImportPdf={store.importPdfPagesIntoCurrentNotebook}
       />
 
       {/* Model Context Protocol (MCP) Hub Modal */}
@@ -471,6 +499,37 @@ export function App() {
         isOpen={showMcpModal}
         onClose={() => setShowMcpModal(false)}
       />
+
+      {/* PDF Document Import Progress Dialog */}
+      {store.isImportingPdf && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="bg-[#10121a] border border-white/10 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center text-center shadow-2xl">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/15 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-3 animate-pulse shadow-sm">
+              <FileUp size={22} />
+            </div>
+            <h3 className="text-sm font-semibold text-white">Importing PDF Document</h3>
+            <p className="text-xs text-zinc-400 mt-1 mb-4">
+              {store.pdfImportProgress?.message || 'Processing document pages...'}
+            </p>
+            {store.pdfImportProgress && store.pdfImportProgress.total > 0 && (
+              <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-blue-500 h-full transition-all duration-300 rounded-full"
+                  style={{
+                    width: `${Math.max(
+                      5,
+                      Math.round((store.pdfImportProgress.current / store.pdfImportProgress.total) * 100)
+                    )}%`,
+                  }}
+                />
+              </div>
+            )}
+            <span className="text-[10px] font-mono text-zinc-500 mt-3">
+              {store.pdfImportProgress?.current || 0} of {store.pdfImportProgress?.total || 1} pages
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
