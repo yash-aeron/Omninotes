@@ -144,6 +144,120 @@ export function renderPageToCanvas(
 }
 
 /**
+ * Helper to load an image asynchronously
+ */
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = src;
+  });
+}
+
+/**
+ * Asynchronously renders page strokes, text blocks, and PDF background to an HTML canvas.
+ */
+export async function renderPageToCanvasAsync(
+  page: PageMetadata,
+  options: RenderOptions = {}
+): Promise<HTMLCanvasElement | null> {
+  if (typeof document === 'undefined') return null;
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const pageW = page.width || 800;
+  const pageH = page.height || 1100;
+
+  let sourceX = 0;
+  let sourceY = 0;
+  let contentW = pageW;
+  let contentH = pageH;
+
+  const maxWidth = options.maxWidth || 1600;
+  const maxHeight = options.maxHeight || 2200;
+  const scale = Math.min(1.5, maxWidth / contentW, maxHeight / contentH);
+
+  canvas.width = Math.round(contentW * scale);
+  canvas.height = Math.round(contentH * scale);
+
+  ctx.scale(scale, scale);
+  ctx.translate(-sourceX, -sourceY);
+
+  // Background - crisp white
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(sourceX, sourceY, contentW, contentH);
+
+  // Draw PDF Background if available
+  if (page.pdfBackground?.dataUrl) {
+    try {
+      const bgImg = await loadImage(page.pdfBackground.dataUrl);
+      ctx.drawImage(bgImg, 0, 0, pageW, pageH);
+    } catch {
+      // Continue if background image fails
+    }
+  }
+
+  // Draw user placed images
+  for (const imgEl of page.images || []) {
+    try {
+      const elImg = await loadImage(imgEl.src);
+      ctx.drawImage(elImg, imgEl.x, imgEl.y, imgEl.width, imgEl.height);
+    } catch {}
+  }
+
+  // Render highlighters
+  const highlighters = page.strokes.filter((s) => s.style.penType === 'highlighter');
+  for (const s of highlighters) {
+    const pathString = s.pathData || generateStrokePath(s.points, s.style);
+    if (!pathString) continue;
+    try {
+      const path = new Path2D(pathString);
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = s.style.color || '#FACC15';
+      ctx.fill(path);
+    } catch {}
+  }
+
+  // Render ink strokes
+  const regularStrokes = page.strokes.filter((s) => s.style.penType !== 'highlighter');
+  for (const s of regularStrokes) {
+    const pathString = s.pathData || generateStrokePath(s.points, s.style);
+    if (!pathString) continue;
+    try {
+      const path = new Path2D(pathString);
+      ctx.globalAlpha = s.style.opacity || 1;
+      ctx.fillStyle = s.style.color || '#111827';
+      ctx.fill(path);
+    } catch {
+      ctx.strokeStyle = s.style.color || '#111827';
+      ctx.lineWidth = s.style.size || 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      s.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.stroke();
+    }
+  }
+
+  // Render typed text blocks
+  ctx.globalAlpha = 1;
+  for (const tb of page.textBlocks || []) {
+    ctx.fillStyle = '#111827';
+    ctx.font = `${tb.fontSize || 16}px sans-serif`;
+    ctx.fillText(tb.text, tb.x, tb.y + (tb.fontSize || 16));
+  }
+
+  return canvas;
+}
+
+/**
  * Returns clean Base64 string of page canvas (without data:image prefix, ready for Ollama API)
  */
 export function renderPageToBase64(
@@ -158,6 +272,24 @@ export function renderPageToBase64(
   const dataUrl = canvas.toDataURL(format, quality);
 
   // Return base64 payload without header
+  const commaIdx = dataUrl.indexOf(',');
+  return commaIdx !== -1 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+}
+
+/**
+ * Asynchronous version that includes PDF background for AI Vision analysis
+ */
+export async function renderPageToBase64Async(
+  page: PageMetadata,
+  options: RenderOptions = {}
+): Promise<string> {
+  const canvas = await renderPageToCanvasAsync(page, options);
+  if (!canvas) return '';
+
+  const format = options.format || 'image/jpeg';
+  const quality = options.quality ?? 0.88;
+  const dataUrl = canvas.toDataURL(format, quality);
+
   const commaIdx = dataUrl.indexOf(',');
   return commaIdx !== -1 ? dataUrl.slice(commaIdx + 1) : dataUrl;
 }
